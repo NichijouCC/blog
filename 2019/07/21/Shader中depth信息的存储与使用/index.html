@@ -87,7 +87,7 @@
 <meta property="og:site_name" content="Hexo">
 <meta property="og:description" content="简言在 shader中我们会经常用到场景的depth数据，这里记录的是相关的坐标计算过程以及depth使用的技巧。 数学推算记录在 http://www.songho.ca/opengl/gl_projectionmatrix.html 这里给出了投影矩阵的具体计算 顶点计算过程：相机空间某点 point [x,y,z,1]经过投影矩阵计算得到点–[xxx, xxx, Az+B, -z]–//po">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2019-07-20T19:10:49.253Z">
+<meta property="og:updated_time" content="2019-08-03T07:58:21.476Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Shader中depth信息的存储与使用">
 <meta name="twitter:description" content="简言在 shader中我们会经常用到场景的depth数据，这里记录的是相关的坐标计算过程以及depth使用的技巧。 数学推算记录在 http://www.songho.ca/opengl/gl_projectionmatrix.html 这里给出了投影矩阵的具体计算 顶点计算过程：相机空间某点 point [x,y,z,1]经过投影矩阵计算得到点–[xxx, xxx, Az+B, -z]–//po">
@@ -338,32 +338,15 @@
 <li><p>利用 color encode 存储深度信息</p>
 </li>
 </ul>
-<h3 id="利用rgba-存储深度数据"><a href="#利用rgba-存储深度数据" class="headerlink" title="利用rgba 存储深度数据"></a>利用rgba 存储深度数据</h3><pre><code>vec2 PackDepth16( in float depth )
-{
-    float depthVal = depth * (256.0*256.0 - 1.0) / (256.0*256.0);
-    vec3 encode = fract( depthVal * vec3(1.0, 256.0, 256.0*256.0) );
-    return encode.xy - encode.yz / 256.0 + 1.0/512.0;
-}
+<ol>
+<li><p>使用DEPTH TEXTURE 存储深度信息<br>在webgl1.0 使用 depthtexture 需要拓展 <code>WEBGL_depth_texture</code></p>
+</li>
+<li><p>利用rgba 存储深度数据</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">vec2 PackDepth16( in float depth )</span><br><span class="line">&#123;</span><br><span class="line">    float depthVal = depth * (256.0*256.0 - 1.0) / (256.0*256.0);</span><br><span class="line">    vec3 encode = fract( depthVal * vec3(1.0, 256.0, 256.0*256.0) );</span><br><span class="line">    return encode.xy - encode.yz / 256.0 + 1.0/512.0;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">float UnpackDepth16( in vec2 pack )</span><br><span class="line">&#123;</span><br><span class="line">  float depth = dot( pack, 1.0 / vec2(1.0, 256.0) );</span><br><span class="line">  return depth * (256.0*256.0) / (256.0*256.0 - 1.0);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">vec4 PackDepth32_orig(in float frag_depth) &#123;</span><br><span class="line">  vec4 bitSh = vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0);</span><br><span class="line">  vec4 bitMsk = vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);</span><br><span class="line">  vec4 enc = fract(frag_depth * bitSh);</span><br><span class="line">  enc -= enc.xxyz * bitMsk;</span><br><span class="line">  return enc;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">float UnpackDepth32_orig( const in vec4 enc ) &#123;</span><br><span class="line">  const vec4 bit_shift = vec4( 1.0 / ( 256.0 * 256.0 * 256.0 ), 1.0 / ( 256.0 * 256.0 ), 1.0 / 256.0, 1.0 );</span><br><span class="line">  float decoded = dot( enc, bit_shift );</span><br><span class="line">  return decoded;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-float UnpackDepth16( in vec2 pack )
-{
-  float depth = dot( pack, 1.0 / vec2(1.0, 256.0) );
-  return depth * (256.0*256.0) / (256.0*256.0 - 1.0);
-}
-
-vec4 PackDepth32_orig(in float frag_depth) {
-  vec4 bitSh = vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0);
-  vec4 bitMsk = vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);
-  vec4 enc = fract(frag_depth * bitSh);
-  enc -= enc.xxyz * bitMsk;
-  return enc;
-}
-
-float UnpackDepth32_orig( const in vec4 enc ) {
-  const vec4 bit_shift = vec4( 1.0 / ( 256.0 * 256.0 * 256.0 ), 1.0 / ( 256.0 * 256.0 ), 1.0 / 256.0, 1.0 );
-  float decoded = dot( enc, bit_shift );
-  return decoded;
-}</code></pre><h4 id="Reference-1"><a href="#Reference-1" class="headerlink" title="Reference"></a>Reference</h4><p><a href="https://stackoverflow.com/questions/48288154/pack-depth-information-in-a-rgba-texture-using-mediump-precison" target="_blank" rel="noopener">https://stackoverflow.com/questions/48288154/pack-depth-information-in-a-rgba-texture-using-mediump-precison</a><br><a href="http://aras-p.info/blog/2009/07/30/encoding-floats-to-rgba-the-final/" target="_blank" rel="noopener">http://aras-p.info/blog/2009/07/30/encoding-floats-to-rgba-the-final/</a></p>
+</li>
+</ol>
+<h4 id="Reference-1"><a href="#Reference-1" class="headerlink" title="Reference"></a>Reference</h4><p><a href="https://stackoverflow.com/questions/48288154/pack-depth-information-in-a-rgba-texture-using-mediump-precison" target="_blank" rel="noopener">https://stackoverflow.com/questions/48288154/pack-depth-information-in-a-rgba-texture-using-mediump-precison</a><br><a href="http://aras-p.info/blog/2009/07/30/encoding-floats-to-rgba-the-final/" target="_blank" rel="noopener">http://aras-p.info/blog/2009/07/30/encoding-floats-to-rgba-the-final/</a></p>
 
       
     </div>
@@ -483,7 +466,7 @@ float UnpackDepth32_orig( const in vec4 enc ) {
               
                 <a href="/blog/archives/">
               
-                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-count">3</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
@@ -529,7 +512,7 @@ float UnpackDepth32_orig( const in vec4 enc ) {
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#简言"><span class="nav-number">1.</span> <span class="nav-text">简言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#数学推算记录"><span class="nav-number">2.</span> <span class="nav-text">数学推算记录</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Reference"><span class="nav-number">2.1.</span> <span class="nav-text">Reference</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#存储深度数据"><span class="nav-number">3.</span> <span class="nav-text">存储深度数据</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#介绍"><span class="nav-number">3.1.</span> <span class="nav-text">介绍</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#利用rgba-存储深度数据"><span class="nav-number">3.2.</span> <span class="nav-text">利用rgba 存储深度数据</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Reference-1"><span class="nav-number">3.2.1.</span> <span class="nav-text">Reference</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#简言"><span class="nav-number">1.</span> <span class="nav-text">简言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#数学推算记录"><span class="nav-number">2.</span> <span class="nav-text">数学推算记录</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Reference"><span class="nav-number">2.1.</span> <span class="nav-text">Reference</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#存储深度数据"><span class="nav-number">3.</span> <span class="nav-text">存储深度数据</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#介绍"><span class="nav-number">3.1.</span> <span class="nav-text">介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Reference-1"><span class="nav-number">3.1.1.</span> <span class="nav-text">Reference</span></a></li></ol></li></ol></li></ol></div>
             
 
           </div>
